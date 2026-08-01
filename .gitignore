@@ -3,9 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Data & Persistent Memory State
+# Data, Backtest Results & Persistent Memory State
 data/
 reports/
+backtest_results/
 *.tmp
 *.log
 

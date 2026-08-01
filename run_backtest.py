@@ -343,7 +343,7 @@ class FastPortfolioBacktester:
         total_return_usd = capital - self.initial_capital
         total_return_pct = (total_return_usd / self.initial_capital) * 100.0
 
-        return {
+        res_dict = {
             "initial_balance": self.initial_capital,
             "final_balance": round(capital, 2),
             "total_return_usd": round(total_return_usd, 2),
@@ -359,6 +359,29 @@ class FastPortfolioBacktester:
             "trade_log": trade_log,
             "equity_curve": equity_curve
         }
+
+        # ── Export Backtest Data to backtest_results/ ──────────────
+        import json
+        import time
+        results_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backtest_results")
+        os.makedirs(results_dir, exist_ok=True)
+        ts_tag = time.strftime('%Y%m%d_%H%M%S')
+
+        # Save Trade Log CSV
+        if trade_log:
+            df_log = pd.DataFrame(trade_log)
+            log_csv_path = os.path.join(results_dir, f"backtest_trades_{ts_tag}.csv")
+            df_log.to_csv(log_csv_path, index=False)
+            res_dict["trade_log_csv"] = log_csv_path
+
+        # Save Summary JSON
+        summary_json_path = os.path.join(results_dir, f"backtest_summary_{ts_tag}.json")
+        json_export = {k: v for k, v in res_dict.items() if k not in ["trade_log", "equity_curve"]}
+        with open(summary_json_path, 'w', encoding='utf-8') as f:
+            json.dump(json_export, f, indent=4)
+        res_dict["summary_json"] = summary_json_path
+
+        return res_dict
 
 
 def run_portfolio_backtest():
@@ -439,6 +462,10 @@ def run_portfolio_backtest():
 
     dd_color = C_GREEN if abs(results['max_drawdown_pct']) < 15.0 else C_RED
     print(f"  Max Portfolio DD (%) : {dd_color}{results['max_drawdown_pct']:.2f}%{C_RESET} (-${results['max_drawdown_usd']:,.2f})", flush=True)
+    if "trade_log_csv" in results:
+        print(f"  Trade Log CSV Saved  : {C_CYAN}{results['trade_log_csv']}{C_RESET}", flush=True)
+    if "summary_json" in results:
+        print(f"  Summary JSON Saved   : {C_CYAN}{results['summary_json']}{C_RESET}", flush=True)
     print(DBL_SEP, flush=True)
 
     # Print recent trade log sample
