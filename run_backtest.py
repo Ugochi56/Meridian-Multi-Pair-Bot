@@ -348,6 +348,8 @@ class FastPortfolioBacktester:
             "final_balance": round(capital, 2),
             "total_return_usd": round(total_return_usd, 2),
             "total_return_pct": round(total_return_pct, 2),
+            "gross_profit": round(gross_profit, 2),
+            "gross_loss": round(gross_loss, 2),
             "sharpe_ratio": round(sharpe, 2),
             "max_drawdown_pct": round(max_dd_pct, 2),
             "max_drawdown_usd": round(max_dd_usd, 2),
@@ -455,6 +457,8 @@ def run_portfolio_backtest():
 
     print(f"  Net Portfolio Profit : {pnl_str}", flush=True)
     print(f"  Total Net Return     : {ret_str}", flush=True)
+    print(f"  Gross Profit         : {C_GREEN}+${results['gross_profit']:,.2f}{C_RESET}", flush=True)
+    print(f"  Gross Loss           : {C_RED}-${results['gross_loss']:,.2f}{C_RESET}", flush=True)
     print(f"  Total Trades Executed: {results['total_trades']} ({results['winning_trades']} Wins / {results['losing_trades']} Losses)", flush=True)
     print(f"  Overall Win Rate     : {C_GREEN}{results['win_rate_pct']}%{C_RESET}", flush=True)
     print(f"  Profit Factor        : {C_CYAN}{results['profit_factor']}{C_RESET}", flush=True)
