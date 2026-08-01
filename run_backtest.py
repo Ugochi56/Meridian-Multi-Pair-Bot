@@ -166,6 +166,8 @@ class FastPortfolioBacktester:
                     pnl_b = (p_b - pos["entry_price_b"]) * pos["lots_b"] * info_b.get("standard_lot", 100000)
 
                 pos["unrealized_pnl"] = round(pnl_a + pnl_b, 2)
+                if "peak_pnl" not in pos or pos["unrealized_pnl"] > pos["peak_pnl"]:
+                    pos["peak_pnl"] = pos["unrealized_pnl"]
                 unrealized_pnl += pos["unrealized_pnl"]
 
             current_equity = capital + unrealized_pnl
@@ -173,7 +175,7 @@ class FastPortfolioBacktester:
                 peak_equity = current_equity
             equity_curve.append(round(current_equity, 2))
 
-            # --- Check Exits / Partial Exits / Stop Loss ---
+            # --- Check Exits / Partial Exits / Trailing Profit Lock / Stop Loss ---
             for pos in list(open_positions):
                 pk = pos["pair_key"]
                 z = pair_series[pk]["zscores"][bar]
@@ -189,8 +191,9 @@ class FastPortfolioBacktester:
                         pos["unrealized_pnl"] = round(pos["unrealized_pnl"] * 0.5, 2)
                         pos["is_partially_closed"] = True
                         pos["realized_pnl_so_far"] = partial_pnl
+                        pos["peak_pnl"] = pos["unrealized_pnl"]  # Reset peak PnL after partial exit
 
-                # 2. Full Exit / Stop Loss / Daily Loss Cap
+                # 2. Full Exit / Trailing Profit Lock / Stop Loss / Daily Loss Cap
                 exit_signal = False
                 exit_reason = ""
 
@@ -200,6 +203,10 @@ class FastPortfolioBacktester:
                 elif pos["type"] == "SHORT_SPREAD" and z <= self.cfg.EXIT_ZSCORE:
                     exit_signal = True
                     exit_reason = "MEAN_REVERSION"
+                # Trailing Profit Lock: If peak PnL > $4.00 and PnL drops 35% below peak PnL, lock in profit!
+                elif pos.get("peak_pnl", 0.0) >= 4.0 and pos["unrealized_pnl"] <= (pos["peak_pnl"] * 0.65):
+                    exit_signal = True
+                    exit_reason = "PROFIT_LOCK"
                 elif abs(z) >= self.cfg.STOP_ZSCORE:
                     exit_signal = True
                     exit_reason = "STOP_LOSS"
