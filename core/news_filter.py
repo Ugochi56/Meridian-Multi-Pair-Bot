@@ -166,8 +166,8 @@ class EconomicNewsFilter:
                 mins = ev.get("minutes_until", 999)
                 impact = ev.get("impact", "HIGH")
                 
-                window_before = 120 if impact == "ULTRA_HIGH" else self.blackout_minutes_before
-                window_after = 15  # Only block for 15 minutes POST-release to let initial spread spike settle
+                window_before = 30  # Only block for 30 minutes PRE-release to capture preceding price moves
+                window_after = 15   # Only block for 15 minutes POST-release to let initial spread spike settle
 
                 if -window_after <= mins <= window_before:
                     title = ev.get("title", "High Impact Event")
