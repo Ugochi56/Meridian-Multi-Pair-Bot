@@ -412,10 +412,8 @@ class MeridianBot:
             if "peak_pnl" not in pos or unreal_pnl > pos["peak_pnl"]:
                 pos["peak_pnl"] = unreal_pnl
 
-            ticks_held = self.tick_count - pos.get("open_tick_count", self.tick_count)
-
-            # 1. Partial Exit (50/50 scale out at Z = 1.0, requires at least 4 ticks holding time)
-            if not pos.get("is_partially_closed", False) and ticks_held >= 4:
+            # 1. Partial Exit (50/50 scale out at Z = 1.0)
+            if not pos.get("is_partially_closed", False):
                 if (pos["type"] == "LONG_SPREAD" and curr_z >= -self.cfg.PARTIAL_EXIT_ZSCORE) or \
                    (pos["type"] == "SHORT_SPREAD" and curr_z <= self.cfg.PARTIAL_EXIT_ZSCORE):
                     part_res = self.oms.partial_close_position(pos["position_id"], pct=0.5)
@@ -441,13 +439,12 @@ class MeridianBot:
             exit_signal = False
             exit_reason = ""
 
-            if ticks_held >= 4:
-                if pos["type"] == "LONG_SPREAD" and curr_z >= -self.cfg.EXIT_ZSCORE:
-                    exit_signal = True
-                    exit_reason = "MEAN_REVERSION"
-                elif pos["type"] == "SHORT_SPREAD" and curr_z <= self.cfg.EXIT_ZSCORE:
-                    exit_signal = True
-                    exit_reason = "MEAN_REVERSION"
+            if pos["type"] == "LONG_SPREAD" and curr_z >= -self.cfg.EXIT_ZSCORE:
+                exit_signal = True
+                exit_reason = "MEAN_REVERSION"
+            elif pos["type"] == "SHORT_SPREAD" and curr_z <= self.cfg.EXIT_ZSCORE:
+                exit_signal = True
+                exit_reason = "MEAN_REVERSION"
 
             # Nexus Trailing Profit Lock: If peak PnL >= $4.00 and PnL drops 35% from peak
             if pos.get("peak_pnl", 0.0) >= 4.0 and unreal_pnl <= (pos["peak_pnl"] * 0.65):
