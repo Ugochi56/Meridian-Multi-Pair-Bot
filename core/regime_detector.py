@@ -13,7 +13,7 @@ class MarketRegimeDetector:
     """
     Calculates ADX and Volatility Ratio across major Forex pairs to determine active market regime.
     """
-    def __init__(self, adx_trend_threshold: float = 25.0, adx_range_threshold: float = 20.0):
+    def __init__(self, adx_trend_threshold: float = 45.0, adx_range_threshold: float = 25.0):
         self.adx_trend_threshold = adx_trend_threshold
         self.adx_range_threshold = adx_range_threshold
 
@@ -57,6 +57,7 @@ class MarketRegimeDetector:
     def evaluate_regime(self, df: pd.DataFrame) -> Dict[str, Any]:
         """
         Evaluates market regime for a single Forex pair OHLC DataFrame.
+        Stat-Arb trades spread mean-reversion, so trades are allowed up to extreme ADX > 45.0.
         """
         high = df["high"].to_numpy()
         low = df["low"].to_numpy()
@@ -67,17 +68,17 @@ class MarketRegimeDetector:
 
         # Determine regime
         if curr_adx > self.adx_trend_threshold:
-            regime = "TREND"
+            regime = "PARABOLIC_TREND"
             trade_allowed = False
-            status = "STRONG TREND DETECTED: Counter-trend pair trades suppressed."
+            status = f"EXTREME PARABOLIC TREND DETECTED (ADX {curr_adx:.1f} > 45.0): Trades suppressed for safety."
         elif curr_adx < self.adx_range_threshold:
             regime = "RANGE"
             trade_allowed = True
-            status = "CHOPPY / RANGING: Optimal conditions for Statistical Arbitrage."
+            status = f"CHOPPY / RANGING (ADX {curr_adx:.1f}): Optimal conditions for Statistical Arbitrage."
         else:
-            regime = "TRANSITION"
+            regime = "MODERATE_TREND"
             trade_allowed = True
-            status = "TRANSITION REGIME: Pair trading active with moderate position sizing."
+            status = f"MODERATE TREND (ADX {curr_adx:.1f}): Cointegrated pair trading active."
 
         return {
             "adx": round(curr_adx, 1),
