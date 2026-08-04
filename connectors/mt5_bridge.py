@@ -198,6 +198,22 @@ class MT5TerminalBridge:
         filling_a = self.get_filling_mode(sym_a)
         filling_b = self.get_filling_mode(sym_b)
 
+        info_a = mt5.symbol_info(sym_a)
+        info_b = mt5.symbol_info(sym_b)
+        digits_a = info_a.digits if info_a else 5
+        digits_b = info_b.digits if info_b else 5
+
+        # Calculate hard broker Stop Loss and Take Profit (30 pips SL / 45 pips TP)
+        sl_distance_a = price_a * 0.0030
+        tp_distance_a = price_a * 0.0045
+        sl_a = round(price_a - sl_distance_a if type_a == mt5.ORDER_TYPE_BUY else price_a + sl_distance_a, digits_a)
+        tp_a = round(price_a + tp_distance_a if type_a == mt5.ORDER_TYPE_BUY else price_a - tp_distance_a, digits_a)
+
+        sl_distance_b = price_b * 0.0030
+        tp_distance_b = price_b * 0.0045
+        sl_b = round(price_b - sl_distance_b if type_b == mt5.ORDER_TYPE_BUY else price_b + sl_distance_b, digits_b)
+        tp_b = round(price_b + tp_distance_b if type_b == mt5.ORDER_TYPE_BUY else price_b - tp_distance_b, digits_b)
+
         # Leg A Request
         req_a = {
             "action": mt5.TRADE_ACTION_DEAL,
@@ -205,6 +221,8 @@ class MT5TerminalBridge:
             "volume": float(lots_a),
             "type": type_a,
             "price": price_a,
+            "sl": sl_a,
+            "tp": tp_a,
             "deviation": 20,
             "magic": self.magic_number,
             "comment": f"Meridian_Pair_A_{pos_type}",
@@ -224,6 +242,8 @@ class MT5TerminalBridge:
             "volume": float(lots_b),
             "type": type_b,
             "price": price_b,
+            "sl": sl_b,
+            "tp": tp_b,
             "deviation": 20,
             "magic": self.magic_number,
             "comment": f"Meridian_Pair_B_{pos_type}",
