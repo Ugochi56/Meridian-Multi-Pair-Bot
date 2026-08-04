@@ -412,33 +412,12 @@ class MeridianBot:
             if "peak_pnl" not in pos or unreal_pnl > pos["peak_pnl"]:
                 pos["peak_pnl"] = unreal_pnl
 
-            # 1. Partial Exit (50/50 scale out at Z = 1.0)
-            if not pos.get("is_partially_closed", False):
-                if (pos["type"] == "LONG_SPREAD" and curr_z >= -self.cfg.PARTIAL_EXIT_ZSCORE) or \
-                   (pos["type"] == "SHORT_SPREAD" and curr_z <= self.cfg.PARTIAL_EXIT_ZSCORE):
-                    part_res = self.oms.partial_close_position(pos["position_id"], pct=0.5)
-                    if part_res:
-                        pos["peak_pnl"] = pos.get("unrealized_pnl", 0.0)
-                        log.info(
-                            f"{C_YELLOW}PARTIAL EXIT{C_RESET} | #{pos['position_id']} {leg_a}/{leg_b}"
-                            f" | Scaled 50% at Z={curr_z:+.2f} | PnL: {fmt_usd(part_res['partial_pnl'])}"
-                        )
-
-            # 2. Nexus Pre-News Protection Guard (within 15 mins of high-impact news)
-            news_filter = self.risk_manager.news_filter
-            info_a = MAJOR_FOREX_PAIRS.get(leg_a, {})
-            info_b = MAJOR_FOREX_PAIRS.get(leg_b, {})
-            trade_currs = [info_a.get("base"), info_a.get("quote"), info_b.get("base"), info_b.get("quote")]
-            is_imminent, news_msg = news_filter.is_news_imminent_for_active_trades(*trade_currs, imminent_minutes=15)
-            if is_imminent and not pos.get("pre_news_locked", False):
-                part_res = self.oms.partial_close_position(pos["position_id"], pct=0.5)
-                pos["pre_news_locked"] = True
-                log.info(f"{C_YELLOW}NEXUS PRE-NEWS GUARD{C_RESET} | #{pos['position_id']} {leg_a}/{leg_b} | {news_msg} | 50% profit harvested & stop moved to BE.")
-
-            # 3. Full Exit conditions & Trailing Profit Lock
+            # ── Nexus-Style Full Exit Conditions ──────────────────────
+            # No partial closes. Full entry → Hard SL/TP on broker → Full exit.
             exit_signal = False
             exit_reason = ""
 
+            # 1. Mean Reversion Target Hit (Z-score reverted to exit zone)
             if pos["type"] == "LONG_SPREAD" and curr_z >= -self.cfg.EXIT_ZSCORE:
                 exit_signal = True
                 exit_reason = "MEAN_REVERSION"
@@ -446,22 +425,33 @@ class MeridianBot:
                 exit_signal = True
                 exit_reason = "MEAN_REVERSION"
 
-            # Nexus Trailing Profit Lock: If peak PnL >= $4.00 and PnL drops 35% from peak
+            # 2. Trailing Profit Lock: If peak PnL >= $4.00 and PnL drops 35% from peak
             if pos.get("peak_pnl", 0.0) >= 4.0 and unreal_pnl <= (pos["peak_pnl"] * 0.65):
                 exit_signal = True
                 exit_reason = "PROFIT_LOCK"
 
+            # 3. Z-Score Stop Loss (spread diverged beyond recovery)
             if abs(curr_z) >= self.cfg.STOP_ZSCORE:
                 exit_signal = True
                 exit_reason = "STOP_LOSS"
 
-            # Daily equity guard - force close all
+            # 4. Pre-News Full Exit: Close position entirely before high-impact news
+            news_filter = self.risk_manager.news_filter
+            info_a = MAJOR_FOREX_PAIRS.get(leg_a, {})
+            info_b = MAJOR_FOREX_PAIRS.get(leg_b, {})
+            trade_currs = [info_a.get("base"), info_a.get("quote"), info_b.get("base"), info_b.get("quote")]
+            is_imminent, news_msg = news_filter.is_news_imminent_for_active_trades(*trade_currs, imminent_minutes=15)
+            if is_imminent:
+                exit_signal = True
+                exit_reason = "NEWS_GUARD"
+
+            # 5. Daily equity guard - force close all
             breached, _ = self.risk_manager.is_daily_equity_cap_breached(self.oms.equity)
             if breached:
                 exit_signal = True
                 exit_reason = "DAILY_EQUITY_GUARD"
 
-            # Friday weekend guard - force close all
+            # 6. Friday weekend guard - force close all
             is_friday, _ = ForexRiskManager.is_friday_weekend_close()
             if is_friday:
                 exit_signal = True
