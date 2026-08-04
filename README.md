@@ -1,4 +1,4 @@
-# MERIDIAN FX — Multi-Currency Statistical Arbitrage Engine
+# MERIDIAN FX — Institutional Multi-Asset Trading Engine
 
 ```
     __  ___          _     ___            
@@ -7,61 +7,48 @@
  / /  / /  __/ /  / / /_/ / / /_/ / / / / 
 /_/  /_/\___/_/  /_/\__,_/_/\__,_/_/ /_/  
 
-       Multi-Currency Statistical Arbitrage Engine
+       Multi-Pair Direct Execution Trading Bot
 ```
 
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![MetaTrader 5](https://img.shields.io/badge/MetaTrader-5-green.svg)](https://www.mql5.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-
-**Meridian FX** is an institutional-grade, multi-currency statistical arbitrage and pair trading engine designed for Forex markets. It scans a 10-symbol Forex universe ($\rightarrow$ 45 pair combinations), dynamically tracks cointegration relationships via adaptive **Kalman Filters**, ranks trade opportunities through a multi-factor **Signal Aggregator**, and executes synchronized dual-leg orders directly through **MetaTrader 5 (MT5)**.
-
----
-
-## Key Features & Core Upgrades
-
-### 1. Dynamic Cointegration & Kalman Filtering
-- **Dynamic Hedge Ratio Estimation**: Implements adaptive Kalman Filtering ($\beta_t$) to update spread calculations ($S_t = P_A - \beta_t P_B$) on every single tick.
-- **Engle-Granger Cointegration**: Performs Augmented Dickey-Fuller (ADF) stationarity tests ($p < 0.05$) to verify cointegration before entry.
-- **Ornstein-Uhlenbeck (OU) Half-Life & Hurst Exponent**: Restricts entries to strongly mean-reverting series ($H < 0.45$, Half-life $\le 20$ bars).
-
-### 2. Multi-Factor Signal Aggregator (`core/aggregator.py`)
-- Evaluates all 45 pair combinations simultaneously every tick.
-- Ranks candidate signals using a composite **Quality Score** (ADF $p$-value, Hurst exponent, Half-life speed, VWAP/RSI alignment, and Realtime News sentiment).
-- Selects the **Top 3 highest-probability setups** while enforcing currency exposure caps (maximum 2 active trades per currency).
-
-### 3. Persistent Memory & State Recovery (`core/state_manager.py`)
-- Thread-safe persistent JSON memory (`data/meridian_state.json`) with atomic file replacements.
-- Automatically recovers active position tickets, entry Z-scores, and 50% partial exit states across Python restarts, crashes, or system reboots.
-
-### 4. Automated Trade Ledger & Monthly Reports (`core/trade_logger.py`)
-- Automatically queries MT5 execution deals by magic number (`888999`).
-- Exports monthly CSV ledgers (`reports/meridian_ledger_{account}_{month}.csv`) and performance summary text reports (`reports/meridian_report_{account}_{month}.txt`).
-
-### 5. Institutional Risk & Execution Defenses
-- **Dynamic Spread & Rollover Guard (`core/spread_guard.py`)**: Blocks order entries during the daily broker rollover gap (21:00–22:00 UTC) and when broker spreads exceed $2.5\times$ baseline.
-- **Weekend Sleep Mode**: Automatically detects market closure (Friday 21:00 UTC to Sunday 22:00 UTC) and enters a zero-noise idle state.
-- **Realtime News Blackout Filter (`core/news_filter.py`)**: Scrapes live ForexFactory news calendars and RSS feeds, blocking entries within 60 minutes of high-impact events across all 4 currencies involved in a pair trade.
-- **50/50 Partial Exit Scaling**: Scales out 50% of position size at $Z = \pm 1.0$ and moves stop-loss to Break-Even.
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![MetaTrader 5](https://img.shields.io/badge/MetaTrader-5-008000.svg?style=for-the-badge&logo=metatrader&logoColor=white)](https://www.mql5.com/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-D22128.svg?style=for-the-badge&logo=apache&logoColor=white)](LICENSE)
+[![Architecture: Modular](https://img.shields.io/badge/Architecture-Modular_Engine-orange.svg?style=for-the-badge)](#system-architecture)
 
 ---
 
-## 6-Month Real MT5 Portfolio Backtest Results
+## Executive Summary
 
-Verified over **12,000 real M15 candles** pulled directly from MT5 (Exness Account #436506749):
+**Meridian FX** is an institutional-grade, multi-pair direct execution algorithmic trading engine built for MetaTrader 5 (MT5). Engineered for high-probability execution across major Forex currency pairs, Meridian combines session-aware market structure analysis, multi-timeframe trend alignment, and a 5-phase in-flight trade management system.
 
-| Metric | Benchmark Result |
-|---|---|
-| **Historical Horizon** | **~6 Months (12,000 M15 candles from MT5)** |
-| **Initial Starting Balance** | **$541.79** *(Live MT5 Account Balance)* |
-| **Final Account Equity** | **$642.14** |
-| **Net Portfolio Profit** | **+$100.35** |
-| **Total Net Return** | **+18.52%** |
-| **Total Trades Executed** | **274 trades** |
-| **Overall Win Rate** | **50.4%** |
-| **Profit Factor** | **1.21** |
-| **Sharpe Ratio** | **1.86** |
-| **Max Portfolio Drawdown** | **-8.35%** *(Max dollar drawdown was only -$45.80)* |
+Unlike legacy statistical arbitrage engines that trade synthetic pair spreads incurring double transaction costs, **Meridian 2.0** evaluates market structure across individual currency pairs directly—executing single-order entries with exact broker-side stop-losses, dynamic take-profits, break-even locks, and ATR trailing stops.
+
+---
+
+## Key Architectural Pillars
+
+### 1. Multi-Strategy Technical Engine
+Meridian operates a modular strategy suite covering diverse market conditions:
+- **London Breakout Trap**: Asian accumulation range mapping with zero-latency stop-trap placement during the London killzone open.
+- **Bollinger Squeeze Breakout**: Identifies volatility compression (< 20th percentile bandwidth) on M5 and trades confirmed expansion breakouts.
+- **RSI Reversion with Trend Guard**: Mean-reversion scalping on extreme RSI readings (≤30 / ≥70), gated by H1 50-EMA trend direction and M15 ADX trend strength filters.
+- **Liquidity Sweep (Judas Swing)**: Detects institutional stop-hunting above Relative Equal Highs (BSL) and Equal Lows (SSL) with limit-order fade entries.
+- **SMC Change of Character (CHoCH)**: Tracks structural pivot breaks and sets limit orders at 50% midpoint of origin Order Blocks.
+
+### 2. 5-Phase In-Flight Trade Lifecycle
+Every active trade is managed dynamically by an automated position lifecycle manager:
+1. **Precision Entry**: SL-distance risk-adjusted position sizing ($Lots = \frac{Balance \times Risk\%}{SL\_Dist \times Contract\_Size}$).
+2. **Break-Even Lock & Partial Close**: Automatically adjusts Stop Loss to Entry + fee offset and closes 50% of the position volume when unrealized profit reaches 50% of the TP distance.
+3. **ATR Trailing Stop**: Dynamically trails the Stop Loss by $2.0 \times \text{ATR}$ on winning trades, securing accrued profits without suffocating momentum.
+4. **Structural TP Extension**: Scans H1/M15 structural pivots when price approaches target, extending Take Profit to the next structural level while locking SL at the former TP level.
+5. **Clean Exit**: Resolves trades cleanly via hard SL, extended TP, trailing SL, or scheduled news/weekend liquidations.
+
+### 3. Institutional Risk Defenses
+- **Multi-Timeframe Trend Alignment**: Multi-timeframe trend filters prevent counter-trend execution against H1/H4 macro flows.
+- **Session-Aware Killzone Activation**: Restricts active symbol universes and scales risk according to global session liquidity (Asian, London, NY Overlap, NY PM).
+- **Dynamic Spread Calibration**: Samples broker spreads on startup and rejects order entries during spread spikes exceeding $1.5\times$ baseline.
+- **Realtime News Blackout**: Integrates live news feed scraping to block entries within 60 minutes of high-impact macroeconomic events.
+- **Persistent State Recovery**: Atomic JSON state tracking (`data/meridian_state.json`) guarantees immediate recovery of tickets, SL levels, and partial exit states across restarts.
 
 ---
 
@@ -69,19 +56,50 @@ Verified over **12,000 real M15 candles** pulled directly from MT5 (Exness Accou
 
 ```mermaid
 graph TD
-    A[MT5 Live Data Feed / Bar Stream] --> B[Data Engine]
-    B --> C[Strategy Matrix Engine]
-    C -->|Calculate Beta, Z-Score, ADF, Hurst| D[Candidate Pair Pool]
-    D --> E[Signal Aggregator & Quality Ranker]
-    E --> F[Forex Risk Manager]
-    F -->|News Blackout Check| G1[News & Sentiment Engine]
-    F -->|Spread Spike & Rollover Guard| G2[Spread Guard]
-    F -->|Weekend Closure Check| G3[Weekend Guard]
-    F -->|Pass Risk Checks| H[MT5 Execution Bridge]
-    H --> I[Live MT5 Terminal]
-    H --> J[Persistent State Manager]
-    H --> K[Monthly CSV Trade Ledger]
+    A[MT5 Live Market Stream] --> B[Data Engine: M5, H1, H4 OHLCV]
+    B --> C[Session & Killzone Risk Manager]
+    C -->|Session Risk & Active Symbol Filter| D[Multi-Strategy Engine]
+    
+    subgraph Multi-Strategy Engine
+        D1[London Breakout]
+        D2[Bollinger Squeeze]
+        D3[RSI Reversion]
+        D4[Liquidity Sweep]
+        D5[SMC CHoCH]
+    end
+
+    D --> D1 & D2 & D3 & D4 & D5
+    D1 & D2 & D3 & D4 & D5 --> E[Signal Aggregator & Quality Ranker]
+    
+    E -->|Quality Floor ≥ 65 & Direction Lock| F[MT5 Execution Bridge]
+    F -->|SL-Distance Sizing| G[Live MT5 Terminal]
+    
+    G --> H[In-Flight Trade Manager]
+    H -->|BE Lock + 50% Partial| G
+    H -->|ATR Trailing Stop| G
+    H -->|Structural TP Jump| G
+    
+    F --> I[State Memory & Ledger]
 ```
+
+---
+
+## Primary Forex Universe
+
+Meridian actively monitors and trades 10 core Forex pairs:
+
+| Symbol | Primary Liquidity Session | Standard Spread Target |
+|---|---|---|
+| `EURUSD` | London / NY Overlap | Tight (< 1.2 pips) |
+| `GBPUSD` | London / NY Overlap | Moderate (< 1.5 pips) |
+| `USDJPY` | Asian / NY Session | Tight (< 1.2 pips) |
+| `USDCHF` | European Session | Tight (< 1.5 pips) |
+| `AUDUSD` | Asian / NY Overlap | Moderate (< 1.6 pips) |
+| `NZDUSD` | Asian Session | Moderate (< 1.8 pips) |
+| `USDCAD` | NY Session | Tight (< 1.4 pips) |
+| `EURGBP` | European Session | Moderate (< 1.6 pips) |
+| `EURJPY` | European / Asian | Moderate (< 1.8 pips) |
+| `GBPJPY` | London / Asian | Variable (< 2.2 pips) |
 
 ---
 
@@ -90,28 +108,34 @@ graph TD
 ```
 meridian/
 ├── config.py                 # Central bot configuration & risk parameters
-├── meridian.py               # Main headless bot entry point & execution loop
-├── run_backtest.py           # 6-month MT5 historical portfolio backtest runner
+├── meridian.py               # Main bot execution orchestrator & tick loop
+├── run_backtest.py           # Historical portfolio backtest runner
 ├── connectors/
-│   ├── mt5_bridge.py         # MT5 terminal connector & dual-leg order execution
+│   └── mt5_bridge.py         # MT5 terminal bridge, order execution & trade manager
 ├── core/
-│   ├── aggregator.py         # Multi-factor signal aggregator & candidate ranker
-│   ├── forex_pairs.py        # Forex symbol definitions & lot sizing metadata
-│   ├── math_utils.py         # Engle-Granger ADF, Kalman Filter, Hurst, RSI, VWAP
-│   ├── news_filter.py        # 4-currency economic news blackout filter
-│   ├── performance_tracker.py# Empirical win-rate feedback engine
-│   ├── realtime_news.py      # Live RSS & ForexFactory news scraper
-│   ├── regime_detector.py    # ADX market trend regime detector
-│   ├── session_manager.py    # Asian, London, NY session Z-threshold adapter
-│   ├── spread_guard.py       # Dynamic spread spike & 21:00 UTC rollover guard
-│   ├── state_manager.py      # Thread-safe persistent JSON state memory
-│   └── trade_logger.py       # Monthly CSV trade ledger & text summary exporter
+│   ├── aggregator.py         # Candidate signal ranker & Quality Score filter
+│   ├── forex_pairs.py        # Forex symbol definitions & pip specifications
+│   ├── math_utils.py         # Mathematical indicators (ATR, RSI, Bollinger Bands, EMA)
+│   ├── news_filter.py        # High-impact news blackout filter
+│   ├── performance_tracker.py# Trade outcome logger & Kelly risk adapter
+│   ├── realtime_news.py      # ForexFactory & RSS news scraper
+│   ├── regime_detector.py    # ADX & EMA trend regime detector
+│   ├── session_manager.py    # Session killzones & dynamic risk scaling
+│   ├── spread_guard.py       # Spread calibration & broker rollover guard
+│   ├── state_manager.py      # Thread-safe persistent JSON state engine
+│   └── trade_logger.py       # CSV trade ledger & summary report generator
 ├── engine/
-│   ├── backtester.py         # Pair-level backtesting engine
-│   ├── data_feed.py          # Real MT5 candle fetcher & synthetic generator
-│   ├── execution.py          # Paper OMS & partial scale-out manager
-│   ├── risk_manager.py       # Multi-layered institutional risk manager
-│   └── strategy.py           # Pair matrix cointegration scanner
+│   ├── strategies/           # Modular strategy implementations
+│   │   ├── base.py           # Strategy interface contract
+│   │   ├── bb_breakout.py    # Bollinger Squeeze Breakout Strategy
+│   │   ├── liquidity_sweep.py# Judas Swing Liquidity Sweep Strategy
+│   │   ├── london_breakout.py# London Killzone Breakout Strategy
+│   │   ├── rsi_reversion.py  # RSI Mean Reversion Strategy
+│   │   └── smc_choch.py      # Smart Money CHoCH Strategy
+│   ├── backtester.py         # Strategy backtesting engine
+│   ├── data_feed.py          # Candle data fetcher
+│   ├── execution.py          # Execution state manager
+│   └── risk_manager.py       # Portfolio risk engine
 └── README.md
 ```
 
@@ -120,29 +144,41 @@ meridian/
 ## Quick Start Guide
 
 ### Prerequisites
-- Windows 10/11
-- Python 3.10+
-- MetaTrader 5 Terminal installed and logged into your broker account
+- Operating System: **Windows 10 / 11** or **Windows Server 2019+**
+- Environment: **Python 3.10+**
+- Broker Terminal: **MetaTrader 5** (logged into a live or demo broker account with Algo Trading enabled)
 
-### Installation
+### 1. Installation
+Clone the repository and install required dependencies:
 ```bash
 git clone https://github.com/YOUR_USERNAME/meridian.py.git
 cd meridian
-pip install -r requirements.txt  # pandas, numpy, statsmodels, MetaTrader5
+pip install -r requirements.txt
 ```
 
-### Running the Live Bot
+### 2. Configuration
+Review and customize trading parameters in `config.py`:
+```python
+MAX_SINGLE_TRADE_RISK_PCT = 2.0  # Risk 2.0% per trade
+MAX_DAILY_LOSS_PERCENT = 3.0    # 3.0% daily equity halt
+BE_TRIGGER_PCT = 0.50            # Lock BE at 50% TP distance
+PARTIAL_CLOSE_PCT = 0.50         # Scale out 50% volume at BE
+```
+
+### 3. Launch Execution
+Ensure MetaTrader 5 is running, then execute the main engine:
 ```bash
 python meridian.py
 ```
 
-### Running the 6-Month Portfolio Backtest
-```bash
-python run_backtest.py
-```
+---
+
+## Risk Disclaimer
+
+> **IMPORTANT NOTICE**: Trading foreign exchange on margin carries a high level of risk and may not be suitable for all investors. The high degree of leverage can work against you as well as for you. Before deciding to trade foreign exchange or any other financial instrument, you should carefully consider your investment objectives, level of experience, and risk appetite. Past performance is not indicative of future results.
 
 ---
 
 ## License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the **Apache License 2.0**. See [`LICENSE`](LICENSE) for details.
