@@ -568,11 +568,11 @@ class MeridianBot:
                     log.info(f"{C_YELLOW}RISK{C_RESET}  │ {leg_a}/{leg_b} blocked: {reason}")
                 continue
 
-            # Position Sizing
-            risk_amt = self.oms.equity * (self.cfg.RISK_PER_TRADE_PCT / 100.0)
+            # Micro-Lot Position Sizing (0.01 lots per ~$250 equity to respect MT5 free margin)
+            base_lots = max(0.01, round(self.oms.equity / 25000.0, 2))
             beta = max(0.1, abs(cand.beta))
-            lots_a = max(0.01, round(risk_amt / 1000.0, 2))
-            lots_b = max(0.01, round(lots_a * beta, 2))
+            lots_a = max(0.01, min(0.10, base_lots))
+            lots_b = max(0.01, min(0.10, round(lots_a * beta, 2)))
 
             p_a, p_b = cand.price_a, cand.price_b
 
