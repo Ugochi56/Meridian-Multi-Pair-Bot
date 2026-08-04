@@ -219,6 +219,14 @@ class MeridianBot:
             )
             log.info(f"{C_BLUE}DATA{C_RESET}  │ Historical data ready.")
 
+        # Load persistent trade cooldowns from state memory
+        recent_closed = meridian_state.get("recent_closed_pairs", {})
+        now_ts = time.time()
+        for pk, closed_ts in recent_closed.items():
+            if now_ts - closed_ts < 1800:  # 30-minute persistent trade cooldown
+                self.cooldown_pairs[pk] = self.tick_count + 120
+                log.info(f"{C_YELLOW}STATE{C_RESET} │ Persistent trade cooldown active for pair {pk} ({int(1800 - (now_ts - closed_ts))}s remaining).")
+
         # 4. Initial cointegration matrix scan
         self._scan_matrix()
 
@@ -486,11 +494,14 @@ class MeridianBot:
                 self.perf_tracker.record_trade(pair_key, pnl, reason)
 
                 # Sync persistent memory & export monthly ledger
+                recent_closed = meridian_state.get("recent_closed_pairs", {})
+                recent_closed[pair_key] = time.time()
+                meridian_state.set("recent_closed_pairs", recent_closed)
                 meridian_state.update_positions(self.oms.open_positions)
                 export_trade_ledger(magic_number=self.cfg.MT5_MAGIC_NUMBER)
 
-                # Set cooldown so we don't immediately re-enter
-                self.cooldown_pairs[pair_key] = self.tick_count + self.COOLDOWN_TICKS
+                # Set cooldown so we don't immediately re-enter (120 ticks = ~30 minutes)
+                self.cooldown_pairs[pair_key] = self.tick_count + 120
 
     # ── Entry Check via Signal Aggregator ──────────────────────
 

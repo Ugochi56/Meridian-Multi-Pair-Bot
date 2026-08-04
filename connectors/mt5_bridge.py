@@ -203,14 +203,28 @@ class MT5TerminalBridge:
         digits_a = info_a.digits if info_a else 5
         digits_b = info_b.digits if info_b else 5
 
-        # Calculate hard broker Stop Loss and Take Profit (30 pips SL / 45 pips TP)
-        sl_distance_a = price_a * 0.0030
-        tp_distance_a = price_a * 0.0045
+        # Calculate Dynamic ATR-based Stop Loss (2.5x ATR) and Take Profit (3.5x ATR)
+        def _calc_atr(sym: str) -> float:
+            try:
+                rates = mt5.copy_rates_from_pos(sym, mt5.TIMEFRAME_M15, 0, 20)
+                if rates is not None and len(rates) >= 15:
+                    h, l, c = rates["high"], rates["low"], rates["close"]
+                    tr = np.maximum(h[1:] - l[1:], np.maximum(abs(h[1:] - c[:-1]), abs(l[1:] - c[:-1])))
+                    return float(np.mean(tr[-14:]))
+            except Exception:
+                pass
+            return price_a * 0.0015
+
+        atr_a = _calc_atr(sym_a)
+        atr_b = _calc_atr(sym_b)
+
+        sl_distance_a = max(price_a * 0.0015, 2.5 * atr_a)
+        tp_distance_a = max(price_a * 0.0025, 3.5 * atr_a)
         sl_a = round(price_a - sl_distance_a if type_a == mt5.ORDER_TYPE_BUY else price_a + sl_distance_a, digits_a)
         tp_a = round(price_a + tp_distance_a if type_a == mt5.ORDER_TYPE_BUY else price_a - tp_distance_a, digits_a)
 
-        sl_distance_b = price_b * 0.0030
-        tp_distance_b = price_b * 0.0045
+        sl_distance_b = max(price_b * 0.0015, 2.5 * atr_b)
+        tp_distance_b = max(price_b * 0.0025, 3.5 * atr_b)
         sl_b = round(price_b - sl_distance_b if type_b == mt5.ORDER_TYPE_BUY else price_b + sl_distance_b, digits_b)
         tp_b = round(price_b + tp_distance_b if type_b == mt5.ORDER_TYPE_BUY else price_b - tp_distance_b, digits_b)
 
