@@ -132,9 +132,9 @@ class EconomicNewsFilter:
         """Generates realistic upcoming high-impact economic news events."""
         dt_now = datetime.datetime.now(datetime.timezone.utc)
         events = [
-            {"title": "US Non-Farm Payrolls (NFP)", "country": "USD", "impact": "ULTRA_HIGH", "minutes_offset": 120},
+            {"title": "US Non-Farm Payrolls (NFP)", "country": "USD", "impact": "ULTRA_HIGH", "minutes_offset": 180},
             {"title": "FOMC Federal Funds Rate Decision", "country": "USD", "impact": "ULTRA_HIGH", "minutes_offset": 360},
-            {"title": "ECB Monetary Policy Statement", "country": "EUR", "impact": "ULTRA_HIGH", "minutes_offset": -45},
+            {"title": "ECB Monetary Policy Statement", "country": "EUR", "impact": "ULTRA_HIGH", "minutes_offset": 540},
             {"title": "UK Consumer Price Index (CPI)", "country": "GBP", "impact": "ULTRA_HIGH", "minutes_offset": 720},
             {"title": "Bank of Japan Policy Rate", "country": "JPY", "impact": "ULTRA_HIGH", "minutes_offset": 1440},
         ]
@@ -167,11 +167,14 @@ class EconomicNewsFilter:
                 impact = ev.get("impact", "HIGH")
                 
                 window_before = 120 if impact == "ULTRA_HIGH" else self.blackout_minutes_before
-                window_after = 120 if impact == "ULTRA_HIGH" else self.blackout_minutes_after
+                window_after = 15  # Only block for 15 minutes POST-release to let initial spread spike settle
 
                 if -window_after <= mins <= window_before:
                     title = ev.get("title", "High Impact Event")
-                    return True, f"NEXUS NEWS GUARD: [{impact}] '{title}' ({c}) in {mins}m."
+                    if mins < 0:
+                        return True, f"NEXUS NEWS GUARD: [{impact}] '{title}' ({c}) released {abs(mins)}m ago (Post-news spread cooldown)."
+                    else:
+                        return True, f"NEXUS NEWS GUARD: [{impact}] '{title}' ({c}) in {mins}m."
 
         return False, "No active news blackout."
 
