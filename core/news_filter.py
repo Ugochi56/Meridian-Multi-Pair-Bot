@@ -1,8 +1,10 @@
 """
 ForexFactory Economic News Calendar & Multi-Currency News Blackout Filter.
 Protects pair trading & statistical arbitrage from severe volatility shocks during high-impact news events.
+Persists news calendar events to data/forexfactory_calendar.json (Nexus feature parity).
 """
 
+import os
 import time
 import json
 import urllib.request
@@ -13,6 +15,7 @@ from typing import Dict, List, Tuple, Optional, Any
 class EconomicNewsFilter:
     """
     Parses high/medium macroeconomic releases and enforces Nexus-grade news blackout & trade protection windows.
+    Persists calendar state locally to data/forexfactory_calendar.json.
     """
     def __init__(self, blackout_minutes_before: int = 60, blackout_minutes_after: int = 60):
         self.blackout_minutes_before = blackout_minutes_before
@@ -28,11 +31,11 @@ class EconomicNewsFilter:
 
     def fetch_calendar(self) -> List[Dict[str, Any]]:
         """
-        Fetches live economic calendar from ForexFactory JSON API or generates fallback calendar.
-        Accurately calculates minutes_until for live events.
+        Fetches live economic calendar from ForexFactory JSON API or loads local cached JSON file.
+        Persists data to data/forexfactory_calendar.json (Nexus parity).
         """
         now = time.time()
-        # Cache for 15 minutes
+        # Cache in memory for 15 minutes
         if self.news_events and (now - self.last_fetch_timestamp < 900):
             return self.news_events
 
@@ -71,12 +74,59 @@ class EconomicNewsFilter:
                         })
                 self.news_events = parsed_events
                 self.last_fetch_timestamp = now
+                self._save_calendar_to_json(parsed_events)
                 return self.news_events
         except Exception:
-            # Fallback realistic schedule generator if network unavailable
+            # Load local cached JSON from data/forexfactory_calendar.json if offline
+            cached = self._load_calendar_from_json()
+            if cached:
+                self.news_events = cached
+                self.last_fetch_timestamp = now
+                return self.news_events
+
+            # Fallback realistic schedule generator if network & cache unavailable
             self.news_events = self._generate_fallback_news()
             self.last_fetch_timestamp = now
+            self._save_calendar_to_json(self.news_events)
             return self.news_events
+
+    def _save_calendar_to_json(self, events: List[Dict[str, Any]]):
+        """Saves active calendar releases to data/forexfactory_calendar.json like Nexus."""
+        try:
+            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+            os.makedirs(data_dir, exist_ok=True)
+            filepath = os.path.join(data_dir, "forexfactory_calendar.json")
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump({
+                    "last_updated": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                    "total_events": len(events),
+                    "events": events
+                }, f, indent=4)
+        except Exception:
+            pass
+
+    def _load_calendar_from_json(self) -> Optional[List[Dict[str, Any]]]:
+        """Loads cached calendar from data/forexfactory_calendar.json."""
+        try:
+            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+            filepath = os.path.join(data_dir, "forexfactory_calendar.json")
+            if os.path.exists(filepath):
+                with open(filepath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    events = data.get("events", [])
+                    dt_now = datetime.datetime.now(datetime.timezone.utc)
+                    for ev in events:
+                        date_str = ev.get("date", "")
+                        if date_str:
+                            try:
+                                ev_dt = datetime.datetime.fromisoformat(date_str)
+                                ev["minutes_until"] = int((ev_dt - dt_now).total_seconds() / 60)
+                            except Exception:
+                                pass
+                    return events
+        except Exception:
+            pass
+        return None
 
     def _generate_fallback_news(self) -> List[Dict[str, Any]]:
         """Generates realistic upcoming high-impact economic news events."""
@@ -96,7 +146,7 @@ class EconomicNewsFilter:
                 "title": e["title"],
                 "country": e["country"],
                 "impact": e["impact"],
-                "time_utc": ev_time.strftime('%Y-%m-%d %H:%M UTC'),
+                "date": ev_time.isoformat(),
                 "minutes_until": e["minutes_offset"]
             })
         return result
